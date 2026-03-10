@@ -1,0 +1,137 @@
+# %%
+import torch as th
+import torch.nn as nn
+print(th.__version__)
+
+
+# %%
+
+model = nn.Sequential(
+    nn.Conv2d(1, 256, 5, padding=2),
+    nn.ReLU(),
+
+    nn.Conv2d(256, 256, 5, padding=2),
+    nn.BatchNorm2d(256),
+    nn.ReLU(),
+
+    nn.Conv2d(256, 256, 5, padding=2),
+    nn.BatchNorm2d(256),
+    nn.ReLU(),
+
+    nn.Conv2d(256, 256, 5, padding=2),
+    nn.BatchNorm2d(256),
+    nn.ReLU(),
+
+    nn.Conv2d(256, 256, 5, padding=2),
+    nn.BatchNorm2d(256),
+    nn.ReLU(),
+
+    nn.AdaptiveAvgPool2d(1),
+    nn.Flatten(),
+    nn.Linear(256, 10)
+)
+
+
+# %%
+print(model)
+
+
+# %%
+from torchvision import datasets, transforms
+from torch.utils.data import DataLoader
+
+transform = transforms.Compose([
+    transforms.ToTensor()
+])
+
+train_dataset = datasets.FashionMNIST(
+    root="./data",
+    train=True,
+    download=True,
+    transform=transform
+)
+
+test_dataset = datasets.FashionMNIST(
+    root="./data",
+    train=False,
+    download=True,
+    transform=transform
+)
+
+train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
+test_loader  = DataLoader(test_dataset, batch_size=64, shuffle=False)
+
+
+# %%
+device = "cuda" if th.cuda.is_available() else "cpu"
+model = model.to(device)
+
+criterion = nn.CrossEntropyLoss()
+optimizer = th.optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
+
+# optimizer = th.optim.AdamW(
+#     model.parameters(),
+#     lr=3e-4,
+#     weight_decay=1e-4
+# )
+
+# %%
+def train_one_epoch(model, loader, optimizer, criterion):
+    model.train()
+    correct, total, loss_sum = 0, 0, 0.0
+
+    for x, y in loader:
+        x, y = x.to(device), y.to(device)
+
+        optimizer.zero_grad()
+        logits = model(x)
+        loss = criterion(logits, y)
+        loss.backward()
+        optimizer.step()
+
+        loss_sum += loss.item() * x.size(0)
+        preds = logits.argmax(dim=1)
+        correct += (preds == y).sum().item()
+        total += y.size(0)
+
+    return loss_sum / total, correct / total
+
+
+
+# %%
+@th.no_grad()
+def evaluate(model, loader):
+    model.eval()
+    correct, total = 0, 0
+
+    for x, y in loader:
+        x, y = x.to(device), y.to(device)
+        logits = model(x)
+        preds = logits.argmax(dim=1)
+        correct += (preds == y).sum().item()
+        total += y.size(0)
+
+    return correct / total
+
+
+# %%
+num_epochs = 10
+
+for epoch in range(num_epochs):
+    train_loss, train_acc = train_one_epoch(
+        model, train_loader, optimizer, criterion
+    )
+    test_acc = evaluate(model, test_loader)
+
+    print(
+        f"Epoch [{epoch+1:2d}/10] "
+        f"Loss: {train_loss:.4f} "
+        f"Train Acc: {train_acc:.4f} "
+        f"Test Acc: {test_acc:.4f}"
+    )
+
+
+# %%
+
+
+
